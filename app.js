@@ -2,11 +2,11 @@ import { ChessGame, PIECES } from './chess-engine.js';
 import { pickMove } from './bots.js';
 import { firebaseConfig } from './firebase-config.js';
 
-// ===== AUTH (Firebase) =====
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
-         signOut, onAuthStateChanged, updateProfile } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
-import { getDatabase, ref, set, onValue, get, update, remove, onDisconnect }
+         signOut, onAuthStateChanged, updateProfile }
+  from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+import { getDatabase, ref, set, onValue, get, update, remove, onDisconnect, serverTimestamp }
   from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
 
 const app = initializeApp(firebaseConfig);
@@ -14,95 +14,162 @@ const auth = getAuth(app);
 const db = getDatabase(app);
 let currentUser = null;
 
+// ===== USERNAME → EMAIL trick =====
+// Firebase Auth cần email, ta fake: username@chess.local
+function nameToEmail(name) {
+  // Chuẩn hóa: chỉ giữ chữ/số/_ và chuyển lowercase
+  const clean = name.toLowerCase().replace(/[^a-z0-9_]/g, '');
+  return clean + '@chess.local';
+}
+
+// ===== AUTH =====
 window.Auth = {
   async register() {
     const name = document.getElementById('reg-name').value.trim();
-    const email = document.getElementById('reg-email').value.trim();
     const pass = document.getElementById('reg-pass').value;
-    const err = document.getElementById('reg-err');
-    err.textContent = '';
-    if (!name || !email || pass.length < 6) { err.textContent = 'Điền đầy đủ, mật khẩu ≥6 ký tự'; return; }
+    const pass2 = document.getElementById('reg-pass2').value;
+    const msg = document.getElementById('reg-msg');
+    msg.className = 'msg'; msg.textContent = '';
+
+    // Validate
+    if (!/^[a-zA-Z0-9_]{3,20}$/.test(name)) {
+      msg.textContent = '❌ Tên 3-20 ký tự, chỉ chữ/số/_'; msg.className = 'msg error'; return;
+    }
+    if (pass.length < 6) {
+      msg.textContent = '❌ Mật khẩu phải ≥ 6 ký tự'; msg.className = 'msg error'; return;
+    }
+    if (pass !== pass2) {
+      msg.textContent = '❌ Mật khẩu nhập lại không khớp'; msg.className = 'msg error'; return;
+    }
+
     try {
+      // Check trùng tên trong DB
+      const nameSnap = await get(ref(db, `usernames/${name.toLowerCase()}`));
+      if (nameSnap.exists()) {
+        msg.textContent = '❌ Tên này đã có người dùng'; msg.className = 'msg error'; return;
+      }
+
+      const email = nameToEmail(name);
       const cred = await createUserWithEmailAndPassword(auth, email, pass);
       await updateProfile(cred.user, { displayName: name });
-    } catch (e) { err.textContent = e.message; }
+
+      // Lưu mapping username → uid
+      await set(ref(db, `usernames/${name.toLowerCase()}`), cred.user.uid);
+      await set(ref(db, `users/${cred.user.uid}`), {
+        name, createdAt: serverTimestamp()
+      });
+
+      msg.textContent = '✅ Tạo tài khoản thành công!'; msg.className = 'msg success';
+    } catch (e) {
+      console.error(e);
+      if (e.code === 'auth/email-already-in-use') {
+        msg.textContent = '❌ Tên đã tồn tại, thử tên khác'; msg.className = 'msg error';
+      } else if (e.code === 'auth/weak-password') {
+        msg.textContent = '❌ Mật khẩu quá yếu'; msg.className = 'msg error';
+      } else {
+        msg.textContent = '❌ Lỗi: ' + e.message; msg.className = 'msg error';
+      }
+    }
   },
+
   async login() {
-    const email = document.getElementById('login-email').value.trim();
+    const name = document.getElementById('login-name').value.trim();
     const pass = document.getElementById('login-pass').value;
-    const err = document.getElementById('login-err');
-    err.textContent = '';
-    try { await signInWithEmailAndPassword(auth, email, pass); }
-    catch (e) { err.textContent = 'Sai email/mật khẩu'; }
+    const msg = document.getElementById('login-msg');
+    msg.className = 'msg'; msg.textContent = '';
+    if (!name || !pass) {
+      msg.textContent = '❌ Nhập đủ tên và mật khẩu'; msg.className = 'msg error'; return;
+    }
+    try {
+      const email = nameToEmail(name);
+      await signInWithEmailAndPassword(auth, email, pass);
+    } catch (e) {
+      console.error(e);
+      if (e.code === 'auth/user-not-found' || e.code === 'auth/invalid-credential' || e.code === 'auth/wrong-password') {
+        msg.textContent = '❌ Sai tên hoặc mật khẩu'; msg.className = 'msg error';
+      } else {
+        msg.textContent = '❌ ' + e.message; msg.className = 'msg error';
+      }
+    }
   },
+
   async logout() { await signOut(auth); }
 };
+
+// Tab switch
+document.querySelectorAll('.auth-tab').forEach(t => {
+  t.onclick = () => {
+    document.querySelectorAll('.auth-tab').forEach(x => x.classList.remove('active'));
+    document.querySelectorAll('.auth-form').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    document.getElementById(`form-${t.dataset.tab}`).classList.add('active');
+  };
+});
 
 onAuthStateChanged(auth, user => {
   currentUser = user;
   if (user) {
-    document.getElementById('user-name').textContent = user.displayName || user.email;
-    document.getElementById('auth-screen').classList.remove('active');
-    document.getElementById('lobby-screen').classList.add('active');
+    document.getElementById('user-display').textContent = '👤 ' + (user.displayName || 'Player');
+    switchScreen('lobby');
   } else {
-    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-    document.getElementById('auth-screen').classList.add('active');
+    switchScreen('auth');
   }
 });
 
+function switchScreen(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(`${name}-screen`).classList.add('active');
+  if (name === 'lobby') Theme.apply();
+}
+
 // ===== THEME =====
-const savedTheme = JSON.parse(localStorage.getItem('chess-theme') || '{}');
+const saved = JSON.parse(localStorage.getItem('chess-theme') || '{}');
 window.Theme = {
-  board: savedTheme.board || 'classic',
-  piece: savedTheme.piece || 'unicode',
+  board: saved.board || 'classic',
+  piece: saved.piece || 'unicode',
   setBoard(v) { this.board = v; this.save(); this.apply(); },
   setPiece(v) { this.piece = v; this.save(); this.apply(); },
   save() { localStorage.setItem('chess-theme', JSON.stringify({ board: this.board, piece: this.piece })); },
   apply() {
     const b = document.getElementById('chessboard');
-    if (!b) return;
-    b.className = `chessboard theme-${this.board} pieces-${this.piece}`;
-    document.getElementById('board-theme').value = this.board;
-    document.getElementById('piece-theme').value = this.piece;
+    if (b) b.className = `chessboard theme-${this.board} pieces-${this.piece}`;
+    document.querySelectorAll('.theme-swatch').forEach(s => {
+      s.classList.toggle('active', s.dataset.board === this.board);
+    });
+    const sel = document.getElementById('piece-theme');
+    if (sel) sel.value = this.piece;
   }
 };
 
+// Bind swatches
+setTimeout(() => {
+  document.querySelectorAll('.theme-swatch').forEach(s => {
+    s.onclick = () => Theme.setBoard(s.dataset.board);
+  });
+}, 100);
+
 // ===== GAME =====
-let game = null;
-let flipped = false;
-let selected = null;
-let legalForSelected = [];
-let mode = 'bot';
-let botLevel = 'tai';
-let myColor = 'w';
-let roomCode = null;
-let lastMove = null;
-let listeners = [];
+let game = null, flipped = false, selected = null, legalForSelected = [];
+let mode = 'bot', botLevel = 'tai', myColor = 'w';
+let roomCode = null, lastMove = null;
 
 window.Game = {
   startBot(level) {
     mode = 'bot'; botLevel = level; myColor = 'w';
     game = new ChessGame();
-    lastMove = null; selected = null; flipped = false;
+    lastMove = null; selected = null; legalForSelected = []; flipped = false;
     const titles = { tai: '🐉 Tài Cực Mạnh', hikaru: '⚡ Hikaru Nakamura', magnus: '👑 Magnus Carlsen' };
     document.getElementById('game-title').textContent = `Bạn (Trắng) vs ${titles[level]}`;
-    this.switchScreen('game');
-    this.render();
+    switchScreen('game'); this.render();
   },
   startOnline(code, color) {
     mode = 'online'; roomCode = code; myColor = color;
-    document.getElementById('game-title').textContent = `Phòng ${code} - Bạn là ${color === 'w' ? 'Trắng' : 'Đen'}`;
-    this.switchScreen('game');
-    this.render();
-  },
-  switchScreen(name) {
-    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-    document.getElementById(`${name}-screen`).classList.add('active');
-    Theme.apply();
+    document.getElementById('game-title').textContent = `Phòng ${code} · Bạn là ${color === 'w' ? 'Trắng' : 'Đen'}`;
+    switchScreen('game'); this.render();
   },
   backToLobby() {
     if (roomCode) { remove(ref(db, `rooms/${roomCode}`)).catch(() => {}); roomCode = null; }
-    this.switchScreen('lobby');
+    switchScreen('lobby');
   },
   reset() {
     if (mode === 'bot') return this.startBot(botLevel);
@@ -126,39 +193,29 @@ window.Game = {
     for (const r of rows) for (const c of cols) {
       const cell = document.createElement('div');
       cell.className = `cell ${(r + c) % 2 === 0 ? 'light' : 'dark'}`;
-      cell.dataset.r = r; cell.dataset.c = c;
       const p = game.get(r, c);
-      if (p) {
-        cell.textContent = PIECES[p];
-        cell.classList.add(p[0]);
-      }
+      if (p) { cell.textContent = PIECES[p]; cell.classList.add(p[0]); }
       if (lastMove && ((lastMove.from[0] === r && lastMove.from[1] === c) ||
-                       (lastMove.to[0] === r && lastMove.to[1] === c))) {
+                       (lastMove.to[0] === r && lastMove.to[1] === c)))
         cell.classList.add('last-move');
-      }
       if (selected && selected[0] === r && selected[1] === c) cell.classList.add('selected');
       const hint = legalForSelected.find(m => m.to[0] === r && m.to[1] === c);
       if (hint) cell.classList.add(hint.capture ? 'capture' : 'hint');
       cell.onclick = () => this.click(r, c);
       board.appendChild(cell);
     }
-    this.updateStatus();
-    this.updateMoveList();
+    this.updateStatus(); this.updateMoveList();
   },
   click(r, c) {
     if (!game) return;
     if (mode === 'bot' && game.turn !== myColor) return;
     if (mode === 'online' && game.turn !== myColor) return;
 
-    // Try move
     const mv = legalForSelected.find(m => m.to[0] === r && m.to[1] === c);
-    if (mv) {
-      this.playMove(mv);
-      return;
-    }
-    // Select
+    if (mv) return this.playMove(mv);
+
     const p = game.get(r, c);
-    if (p && game.pieceColor(p) === game.turn) {
+    if (p && game.pieceColor && game.pieceColor(p) === game.turn) {
       selected = [r, c];
       legalForSelected = game.legalMoves(r, c);
     } else {
@@ -174,47 +231,37 @@ window.Game = {
       this.render();
       const over = game.gameOver();
       if (over) return this.showResult(over);
-      // Bot thinking
       setTimeout(() => {
         const botMove = pickMove(game, botLevel);
         if (botMove) {
-          game.makeMove(botMove);
-          lastMove = botMove;
+          game.makeMove(botMove); lastMove = botMove;
           this.render();
-          const over = game.gameOver();
-          if (over) this.showResult(over);
+          const o = game.gameOver(); if (o) this.showResult(o);
         }
-      }, 300);
+      }, 250);
     } else if (mode === 'online') {
-      // optimistic local apply + write to Firebase
       game.makeMove(mv);
       selected = null; legalForSelected = [];
       this.render();
-      update(ref(db, `rooms/${roomCode}/game`), { fen: game.toFEN(), lastMove: mv, ts: Date.now() })
-        .then(() => {
-          const over = game.gameOver();
-          if (over) this.showResult(over);
-        });
+      update(ref(db, `rooms/${roomCode}/game`), { fen: game.toFEN(), lastMove: mv, ts: Date.now() });
     }
   },
   showResult(over) {
     const el = document.getElementById('status-text');
-    if (over.type === 'checkmate') {
+    if (over.type === 'checkmate')
       el.textContent = `♛ Chiếu hết! ${over.winner === 'w' ? 'Trắng' : 'Đen'} thắng`;
-    } else if (over.type === 'stalemate') {
+    else if (over.type === 'stalemate')
       el.textContent = '🤝 Hòa (hết nước đi)';
-    }
   },
   updateStatus() {
     const el = document.getElementById('status-text');
-    if (!game) { el.textContent = ''; return; }
+    if (!game) return;
     const over = game.gameOver();
     if (over) return this.showResult(over);
-    if (mode === 'bot') {
+    if (mode === 'bot')
       el.textContent = game.turn === 'w' ? '🎯 Lượt của bạn' : '🤖 Bot đang suy nghĩ...';
-    } else {
+    else
       el.textContent = game.turn === myColor ? '🎯 Lượt của bạn' : '⏳ Chờ đối thủ...';
-    }
   },
   updateMoveList() {
     const list = document.getElementById('move-list');
@@ -222,9 +269,7 @@ window.Game = {
     list.innerHTML = '';
     game.history.forEach((m, i) => {
       const div = document.createElement('div');
-      const from = ChessGame.sq(m.from[0], m.from[1]);
-      const to = ChessGame.sq(m.to[0], m.to[1]);
-      div.textContent = `${i + 1}. ${from}${to}${m.capture ? 'x' : ''}`;
+      div.textContent = `${i + 1}. ${ChessGame.sq(m.from[0], m.from[1])}${ChessGame.sq(m.to[0], m.to[1])}${m.capture ? 'x' : ''}`;
       list.appendChild(div);
     });
     list.scrollTop = list.scrollHeight;
@@ -245,46 +290,39 @@ window.Online = {
     });
     roomCode = code;
     Game.startOnline(code, 'w');
-    // Notify on disconnect
-    onDisconnect(ref(db, `rooms/${code}/host`)).remove().catch(() => {});
     this.listenRoom(code);
-    document.getElementById('game-title').textContent = `Phòng ${code} - Chờ đối thủ...`;
-    alert(`Mã phòng: ${code}\nChia sẻ mã này với bạn để vào!`);
+    document.getElementById('game-title').textContent = `Phòng ${code} · Chờ đối thủ...`;
+    alert(`Mã phòng: ${code}\nGửi mã này cho bạn bè để họ vào!`);
   },
   async joinRoom() {
     const code = document.getElementById('room-code-input').value.trim().toUpperCase();
-    if (!code) return;
+    const msg = document.getElementById('room-msg');
+    msg.className = 'msg'; msg.textContent = '';
+    if (!code) { msg.textContent = '❌ Nhập mã phòng'; msg.className = 'msg error'; return; }
     const snap = await get(ref(db, `rooms/${code}`));
-    if (!snap.exists()) { document.getElementById('room-status').textContent = '❌ Phòng không tồn tại'; return; }
+    if (!snap.exists()) { msg.textContent = '❌ Phòng không tồn tại'; msg.className = 'msg error'; return; }
     const data = snap.val();
-    if (data.host === currentUser.uid) { document.getElementById('room-status').textContent = '⚠️ Bạn là chủ phòng'; return; }
-    if (data.guest && data.guest !== currentUser.uid) { document.getElementById('room-status').textContent = '❌ Phòng đã đầy'; return; }
+    if (data.host === currentUser.uid) { msg.textContent = '⚠️ Bạn là chủ phòng này'; msg.className = 'msg error'; return; }
+    if (data.guest && data.guest !== currentUser.uid) { msg.textContent = '❌ Phòng đã đầy'; msg.className = 'msg error'; return; }
     await update(ref(db, `rooms/${code}`), { guest: currentUser.uid, guestName: currentUser.displayName || 'Guest' });
     roomCode = code;
     Game.startOnline(code, 'b');
     this.listenRoom(code);
   },
   listenRoom(code) {
-    listeners.forEach(u => u());
-    listeners = [];
     const roomRef = ref(db, `rooms/${code}`);
-    const unsub = onValue(roomRef, snap => {
-      if (!snap.exists()) return;
+    onValue(roomRef, snap => {
+      if (!snap.exists() || !game) return;
       const data = snap.val();
-      if (data.guest && data.host && game) {
-        // Sync FEN
-        if (data.game.fen !== game.toFEN()) {
-          game.load(data.game.fen);
-          if (data.game.lastMove) lastMove = data.game.lastMove;
-          Game.render();
-        }
+      if (data.game && data.game.fen !== game.toFEN()) {
+        game.load(data.game.fen);
+        if (data.game.lastMove) lastMove = data.game.lastMove;
+        Game.render();
       }
       if (data.guest && document.getElementById('game-title').textContent.includes('Chờ')) {
-        document.getElementById('game-title').textContent = `Phòng ${code} - Đang chơi`;
+        document.getElementById('game-title').textContent = `Phòng ${code} · Đang chơi`;
       }
     });
-    listeners.push(() => {});
-    // store unsubscribe
     onDisconnect(ref(db, `rooms/${code}/guest`)).remove().catch(() => {});
   },
   async resetRoom() {
@@ -295,14 +333,3 @@ window.Online = {
     Game.render();
   }
 };
-
-// Tab switching
-document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
-  document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
-  document.querySelectorAll('.tab-content').forEach(x => x.classList.remove('active'));
-  t.classList.add('active');
-  document.getElementById(`${t.dataset.tab}-form`).classList.add('active');
-});
-
-// Init theme
-Theme.apply();
