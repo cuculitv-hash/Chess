@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>♟️ Chess Master</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♟️</text></svg>">
+</head>
+<body>
+  <!-- Auth Screen -->
+  <div id="auth-screen" class="screen active">
+    <div class="auth-box">
+      <h1>♟️ Chess Master</h1>
+      <div class="tabs">
+        <button class="tab active" data-tab="login">Đăng nhập</button>
+        <button class="tab" data-tab="register">Đăng ký</button>
+      </div>
+      <div id="login-form" class="tab-content active">
+        <input type="email" id="login-email" placeholder="Email">
+        <input type="password" id="login-pass" placeholder="Mật khẩu">
+        <button class="btn-primary" onclick="Auth.login()">Đăng nhập</button>
+        <p class="error" id="login-err"></p>
+      </div>
+      <div id="register-form" class="tab-content">
+        <input type="text" id="reg-name" placeholder="Tên hiển thị">
+        <input type="email" id="reg-email" placeholder="Email">
+        <input type="password" id="reg-pass" placeholder="Mật khẩu (≥6 ký tự)">
+        <button class="btn-primary" onclick="Auth.register()">Đăng ký</button>
+        <p class="error" id="reg-err"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Lobby -->
+  <div id="lobby-screen" class="screen">
+    <header>
+      <h2>♟️ Chess Master</h2>
+      <div class="user-info">
+        <span id="user-name"></span>
+        <button class="btn-small" onclick="Auth.logout()">Đăng xuất</button>
+      </div>
+    </header>
+
+    <div class="lobby-content">
+      <div class="card">
+        <h3>🤖 Đấu với Bot</h3>
+        <button class="btn-bot" onclick="Game.startBot('tai')">🐉 Bot 1: Tài Cực Mạnh</button>
+        <button class="btn-bot" onclick="Game.startBot('hikaru')">⚡ Bot 2: Hikaru Nakamura</button>
+        <button class="btn-bot" onclick="Game.startBot('magnus')">👑 Bot 3: Magnus Carlsen</button>
+      </div>
+
+      <div class="card">
+        <h3>👥 Chơi với bạn bè</h3>
+        <button class="btn-primary" onclick="Online.createRoom()">Tạo phòng</button>
+        <div class="join-row">
+          <input type="text" id="room-code-input" placeholder="Nhập mã phòng" maxlength="6">
+          <button class="btn-primary" onclick="Online.joinRoom()">Vào phòng</button>
+        </div>
+        <p id="room-status"></p>
+      </div>
+
+      <div class="card">
+        <h3>🎨 Phong cách</h3>
+        <label>Bàn cờ:</label>
+        <select id="board-theme" onchange="Theme.setBoard(this.value)">
+          <option value="classic">Cổ điển (Nâu)</option>
+          <option value="green">Xanh lá</option>
+          <option value="blue">Xanh dương</option>
+          <option value="purple">Tím</option>
+          <option value="dark">Tối</option>
+          <option value="marble">Đá cẩm thạch</option>
+        </select>
+        <label>Quân cờ:</label>
+        <select id="piece-theme" onchange="Theme.setPiece(this.value)">
+          <option value="unicode">Unicode ♔♕♖</option>
+          <option value="solid">Đặc (solid)</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Game Screen -->
+  <div id="game-screen" class="screen">
+    <header>
+      <button class="btn-small" onclick="Game.backToLobby()">← Lobby</button>
+      <h3 id="game-title"></h3>
+      <button class="btn-small" onclick="Game.reset()">🔄 Chơi lại</button>
+    </header>
+    <div class="game-layout">
+      <div class="board-wrap">
+        <div id="chessboard" class="chessboard"></div>
+        <p id="status-text"></p>
+      </div>
+      <div class="sidebar">
+        <h4>📜 Lịch sử nước đi</h4>
+        <div id="move-list" class="move-list"></div>
+        <button class="btn-small" onclick="Game.undo()">↩️ Hoàn tác</button>
+        <button class="btn-small" onclick="Game.flip()">🔃 Xoay bàn</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script type="module" src="app.js"></script>
+</body>
+</html>
