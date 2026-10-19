@@ -8,100 +8,169 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♟️</text></svg>">
 </head>
 <body>
-  <!-- Auth Screen -->
+
+  <!-- ========== AUTH SCREEN ========== -->
   <div id="auth-screen" class="screen active">
-    <div class="auth-box">
-      <h1>♟️ Chess Master</h1>
-      <div class="tabs">
-        <button class="tab active" data-tab="login">Đăng nhập</button>
-        <button class="tab" data-tab="register">Đăng ký</button>
-      </div>
-      <div id="login-form" class="tab-content active">
-        <input type="email" id="login-email" placeholder="Email">
-        <input type="password" id="login-pass" placeholder="Mật khẩu">
-        <button class="btn-primary" onclick="Auth.login()">Đăng nhập</button>
-        <p class="error" id="login-err"></p>
-      </div>
-      <div id="register-form" class="tab-content">
-        <input type="text" id="reg-name" placeholder="Tên hiển thị">
-        <input type="email" id="reg-email" placeholder="Email">
-        <input type="password" id="reg-pass" placeholder="Mật khẩu (≥6 ký tự)">
-        <button class="btn-primary" onclick="Auth.register()">Đăng ký</button>
-        <p class="error" id="reg-err"></p>
-      </div>
-    </div>
-  </div>
-
-  <!-- Lobby -->
-  <div id="lobby-screen" class="screen">
-    <header>
-      <h2>♟️ Chess Master</h2>
-      <div class="user-info">
-        <span id="user-name"></span>
-        <button class="btn-small" onclick="Auth.logout()">Đăng xuất</button>
-      </div>
-    </header>
-
-    <div class="lobby-content">
-      <div class="card">
-        <h3>🤖 Đấu với Bot</h3>
-        <button class="btn-bot" onclick="Game.startBot('tai')">🐉 Bot 1: Tài Cực Mạnh</button>
-        <button class="btn-bot" onclick="Game.startBot('hikaru')">⚡ Bot 2: Hikaru Nakamura</button>
-        <button class="btn-bot" onclick="Game.startBot('magnus')">👑 Bot 3: Magnus Carlsen</button>
+    <div class="auth-wrapper">
+      <div class="auth-hero">
+        <h1>♟️ Chess Master</h1>
+        <p>Chơi cờ với bạn bè & bot siêu mạnh</p>
       </div>
 
-      <div class="card">
-        <h3>👥 Chơi với bạn bè</h3>
-        <button class="btn-primary" onclick="Online.createRoom()">Tạo phòng</button>
-        <div class="join-row">
-          <input type="text" id="room-code-input" placeholder="Nhập mã phòng" maxlength="6">
-          <button class="btn-primary" onclick="Online.joinRoom()">Vào phòng</button>
+      <div class="auth-card">
+        <div class="auth-tabs">
+          <button class="auth-tab active" data-tab="login">Đăng nhập</button>
+          <button class="auth-tab" data-tab="register">Đăng ký</button>
         </div>
-        <p id="room-status"></p>
-      </div>
 
-      <div class="card">
-        <h3>🎨 Phong cách</h3>
-        <label>Bàn cờ:</label>
-        <select id="board-theme" onchange="Theme.setBoard(this.value)">
-          <option value="classic">Cổ điển (Nâu)</option>
-          <option value="green">Xanh lá</option>
-          <option value="blue">Xanh dương</option>
-          <option value="purple">Tím</option>
-          <option value="dark">Tối</option>
-          <option value="marble">Đá cẩm thạch</option>
-        </select>
-        <label>Quân cờ:</label>
-        <select id="piece-theme" onchange="Theme.setPiece(this.value)">
-          <option value="unicode">Unicode ♔♕♖</option>
-          <option value="solid">Đặc (solid)</option>
-        </select>
+        <!-- Login -->
+        <form id="form-login" class="auth-form active" onsubmit="event.preventDefault(); Auth.login();">
+          <div class="field">
+            <label>Tên đăng nhập</label>
+            <input type="text" id="login-name" placeholder="Nhập tên của bạn" autocomplete="username" required>
+          </div>
+          <div class="field">
+            <label>Mật khẩu</label>
+            <input type="password" id="login-pass" placeholder="Nhập mật khẩu" autocomplete="current-password" required>
+          </div>
+          <button type="submit" class="btn btn-primary btn-lg">🎯 Đăng nhập</button>
+          <p class="msg" id="login-msg"></p>
+        </form>
+
+        <!-- Register -->
+        <form id="form-register" class="auth-form" onsubmit="event.preventDefault(); Auth.register();">
+          <div class="field">
+            <label>Tên đăng nhập (tự đặt)</label>
+            <input type="text" id="reg-name" placeholder="vd: cao_thu_co, player123" autocomplete="username" required>
+            <small>Chỉ chữ, số, dấu _ (3-20 ký tự)</small>
+          </div>
+          <div class="field">
+            <label>Mật khẩu</label>
+            <input type="password" id="reg-pass" placeholder="Tối thiểu 6 ký tự" autocomplete="new-password" required>
+          </div>
+          <div class="field">
+            <label>Nhập lại mật khẩu</label>
+            <input type="password" id="reg-pass2" placeholder="Nhập lại mật khẩu" autocomplete="new-password" required>
+          </div>
+          <button type="submit" class="btn btn-primary btn-lg">✨ Tạo tài khoản</button>
+          <p class="msg" id="reg-msg"></p>
+        </form>
       </div>
     </div>
   </div>
 
-  <!-- Game Screen -->
+  <!-- ========== LOBBY SCREEN ========== -->
+  <div id="lobby-screen" class="screen">
+    <div class="topbar">
+      <div class="logo">♟️ Chess Master</div>
+      <div class="user-chip">
+        <span id="user-display">👤</span>
+        <button class="btn btn-ghost btn-sm" onclick="Auth.logout()">Đăng xuất</button>
+      </div>
+    </div>
+
+    <div class="lobby-grid">
+      <!-- Bots -->
+      <div class="panel">
+        <div class="panel-head">
+          <h3>🤖 Đấu với Bot</h3>
+        </div>
+        <div class="bot-list">
+          <button class="bot-card" onclick="Game.startBot('tai')">
+            <div class="bot-ava" style="background:#e94560">🐉</div>
+            <div class="bot-info">
+              <div class="bot-name">Tài Cực Mạnh</div>
+              <div class="bot-desc">Cấp 1 · Dễ</div>
+            </div>
+          </button>
+          <button class="bot-card" onclick="Game.startBot('hikaru')">
+            <div class="bot-ava" style="background:#f39c12">⚡</div>
+            <div class="bot-info">
+              <div class="bot-name">Hikaru Nakamura</div>
+              <div class="bot-desc">Cấp 2 · Trung bình</div>
+            </div>
+          </button>
+          <button class="bot-card" onclick="Game.startBot('magnus')">
+            <div class="bot-ava" style="background:#2ecc71">👑</div>
+            <div class="bot-info">
+              <div class="bot-name">Magnus Carlsen</div>
+              <div class="bot-desc">Cấp 3 · Khó</div>
+            </div>
+          </button>
+        </div>
+      </div>
+
+      <!-- Online -->
+      <div class="panel">
+        <div class="panel-head">
+          <h3>👥 Chơi với bạn bè</h3>
+        </div>
+        <button class="btn btn-primary btn-lg" onclick="Online.createRoom()">➕ Tạo phòng mới</button>
+        <div class="divider">hoặc</div>
+        <div class="join-row">
+          <input type="text" id="room-code-input" placeholder="MÃ PHÒNG" maxlength="6" class="input-code">
+          <button class="btn btn-primary" onclick="Online.joinRoom()">Vào</button>
+        </div>
+        <p class="msg" id="room-msg"></p>
+      </div>
+
+      <!-- Theme -->
+      <div class="panel">
+        <div class="panel-head">
+          <h3>🎨 Giao diện</h3>
+        </div>
+        <div class="field">
+          <label>Bàn cờ</label>
+          <div class="theme-grid" id="board-themes">
+            <button class="theme-swatch" data-board="classic" style="background:linear-gradient(135deg,#f0d9b5 50%,#b58863 50%)" title="Cổ điển"></button>
+            <button class="theme-swatch" data-board="green" style="background:linear-gradient(135deg,#eeeed2 50%,#769656 50%)" title="Xanh lá"></button>
+            <button class="theme-swatch" data-board="blue" style="background:linear-gradient(135deg,#dee3e6 50%,#8ca2ad 50%)" title="Xanh dương"></button>
+            <button class="theme-swatch" data-board="purple" style="background:linear-gradient(135deg,#e8dff5 50%,#9a7fc4 50%)" title="Tím"></button>
+            <button class="theme-swatch" data-board="dark" style="background:linear-gradient(135deg,#6b6b6b 50%,#2b2b2b 50%)" title="Tối"></button>
+            <button class="theme-swatch" data-board="marble" style="background:linear-gradient(135deg,#f5f5f5 50%,#555 50%)" title="Cẩm thạch"></button>
+          </div>
+        </div>
+        <div class="field">
+          <label>Quân cờ</label>
+          <select id="piece-theme" onchange="Theme.setPiece(this.value)" class="input-select">
+            <option value="unicode">Unicode ♔♕♖</option>
+            <option value="solid">Đặc (solid)</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== GAME SCREEN ========== -->
   <div id="game-screen" class="screen">
-    <header>
-      <button class="btn-small" onclick="Game.backToLobby()">← Lobby</button>
-      <h3 id="game-title"></h3>
-      <button class="btn-small" onclick="Game.reset()">🔄 Chơi lại</button>
-    </header>
-    <div class="game-layout">
-      <div class="board-wrap">
-        <div id="chessboard" class="chessboard"></div>
-        <p id="status-text"></p>
+    <div class="topbar">
+      <button class="btn btn-ghost" onclick="Game.backToLobby()">← Lobby</button>
+      <div class="game-title" id="game-title">Đang chơi</div>
+      <div class="game-actions">
+        <button class="btn btn-ghost btn-sm" onclick="Game.undo()">↩️ Hoàn tác</button>
+        <button class="btn btn-ghost btn-sm" onclick="Game.flip()">🔃 Xoay</button>
+        <button class="btn btn-primary btn-sm" onclick="Game.reset()">🔄 Chơi lại</button>
       </div>
-      <div class="sidebar">
-        <h4>📜 Lịch sử nước đi</h4>
-        <div id="move-list" class="move-list"></div>
-        <button class="btn-small" onclick="Game.undo()">↩️ Hoàn tác</button>
-        <button class="btn-small" onclick="Game.flip()">🔃 Xoay bàn</button>
+    </div>
+
+    <div class="game-main">
+      <div class="board-container">
+        <div class="board-top" id="status-text">Sẵn sàng</div>
+        <div id="chessboard" class="chessboard"></div>
+        <div class="board-bottom" id="captured-text"></div>
+      </div>
+
+      <div class="game-side">
+        <div class="panel">
+          <div class="panel-head">
+            <h3>📜 Lịch sử</h3>
+          </div>
+          <div id="move-list" class="move-list"></div>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- Scripts -->
   <script type="module" src="app.js"></script>
 </body>
 </html>
